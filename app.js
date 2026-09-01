@@ -5,6 +5,8 @@
 const SB_URL = 'https://ewacvknaabxwhrsbbjer.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV3YWN2a25hYWJ4d2hyc2JiamVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0OTg4NjgsImV4cCI6MjA5NTA3NDg2OH0.39QS7tReESKGcSBOTOp847Sa2fV_1K9QDiK04K3_AJA';
 
+const VAPID_PUB = 'BNxJXpe5_pd6eUtEgGEJqWNtkyA2_mcUH9O-UoPWlCKHOXbCF4PNCOv6s3bPwRAl0UAPafo2UA_BaXUArXrUCBw';
+
 const SB = window.supabase.createClient(SB_URL, SB_KEY, {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, storageKey: 'fam:sesion' }
 });
@@ -14,7 +16,7 @@ let items = [], familia = null, yo = null, tab = 'hoy', offset = 0;
 let panelMode = null, panelDay = null, contextDate = null;
 let query = '', filtros = [], draft = {}, orden = 'usuario';
 let cola = [], avisados = {}, permiso = 'default';
-let tema = 'oscuro';
+let tema = 'oscuro', pushOn = false;
 
 /* aclara u oscurece un color para que se lea sobre el fondo actual */
 function tint(hex) {
@@ -200,7 +202,7 @@ function checkAvisos() {
   if (!due.length) return;
   due.forEach(it => {
     avisados[it.id] = 1;
-    if (permiso === 'granted') {
+    if (permiso === 'granted' && !pushOn) {
       try {
         new Notification((it.persona ? it.persona + ' · ' : '') + it.texto, {
           body: (it.hora ? it.hora + ' · ' : '') + cap(parse(it.fecha).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })),
@@ -213,16 +215,59 @@ function checkAvisos() {
   render();
 }
 function avisoBanner() {
-  if (permiso === 'granted') return '';
+  if (permiso === 'granted' && pushOn) return '';
+  if (permiso === 'granted') return '<div class="warn"><div>Este móvil solo avisa con la app abierta. <button id="askPerm">Terminar de activar</button></div></div>';
   const prox = live(it => { const t = triggerTime(it); return t !== null && t > Date.now(); }).length;
   return '<div class="warn"><div>Avisos apagados en este móvil' + (prox ? ' y tienes ' + prox + ' programados.' : '.') +
     ' <button id="askPerm">Activar</button></div></div>';
 }
+function b64aBytes(b64) {
+  const pad = '='.repeat((4 - b64.length % 4) % 4);
+  const raw = atob((b64 + pad).replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+}
+
+async function estadoPush() {
+  try {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return false;
+    const reg = await navigator.serviceWorker.ready;
+    pushOn = !!(await reg.pushManager.getSubscription());
+    return pushOn;
+  } catch (e) { return false; }
+}
+
+async function suscribirPush() {
+  const btn = $('#btnPerm');
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    $('#menuHint').textContent = 'Este navegador no admite avisos. En iPhone hay que instalar la app en la pantalla de inicio.';
+    return;
+  }
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64aBytes(VAPID_PUB) });
+    const j = sub.toJSON();
+    const { data: { user } } = await SB.auth.getUser();
+    const { error } = await SB.from('fam_push').upsert({
+      endpoint: j.endpoint, user_id: user.id, familia,
+      p256dh: j.keys.p256dh, auth: j.keys.auth,
+      agente: navigator.userAgent.slice(0, 120), fallos: 0
+    });
+    if (error) throw error;
+    pushOn = true;
+    if (btn) btn.textContent = 'Avisos activados en este móvil ✓';
+    $('#menuHint').textContent = 'Este móvil recibirá los avisos aunque la app esté cerrada.';
+    render();
+  } catch (e) {
+    $('#menuHint').textContent = 'No se pudo suscribir: ' + (e.message || e);
+  }
+}
+
 async function pedirPermiso() {
   try {
     const p = await Notification.requestPermission();
     permiso = p; render();
-    if (p === 'granted') new Notification('Avisos activados', { body: 'Te avisaré con la app abierta.', icon: 'icono-192.png' });
+    if (p === 'granted') await suscribirPush();
   } catch (e) { permiso = 'nope'; render(); }
 }
 
@@ -604,13 +649,17 @@ $('#delBtn').addEventListener('click', () => {
   const it = get(draft.id); $('#sheet').classList.add('hidden');
   if (it) { it.borrado = true; upsert(it); }
 });
-$('#menuBtn').addEventListener('click', () => { pintaColores(); $('#menu').classList.remove('hidden'); });
+$('#menuBtn').addEventListener('click', async () => {
+  pintaColores(); $('#menu').classList.remove('hidden');
+  await estadoPush();
+  $('#btnPerm').textContent = pushOn ? 'Avisos activados en este móvil ✓' : 'Activar avisos en este móvil';
+});
 $('#menuClose').addEventListener('click', () => { $('#menu').classList.add('hidden'); $('#ioBox').classList.add('hidden'); $('#menuHint').textContent = ''; });
 $('#menu').addEventListener('input', e => {
   const c = e.target.closest('[data-color]'); if (!c) return;
   PERSONA[c.dataset.color] = c.value; draw(); guardaAjustes();
 });
-$('#btnPerm').addEventListener('click', pedirPermiso);
+$('#btnPerm').addEventListener('click', () => { permiso === 'granted' ? suscribirPush() : pedirPermiso(); });
 $('#btnTema').addEventListener('click', () => {
   tema = tema === 'claro' ? 'oscuro' : 'claro';
   try { localStorage.setItem('fam:tema', tema); } catch (e) {}
@@ -686,7 +735,7 @@ async function arrancar() {
   leerCache(); render();
   await cargarAjustes();
   await cargar();
-  escuchar(); vaciarCola(); checkAvisos(); pintaOffline();
+  escuchar(); vaciarCola(); await estadoPush(); checkAvisos(); pintaOffline();
   setInterval(checkAvisos, 60000);
   setInterval(vaciarCola, 20000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { cargar(); checkAvisos(); } });
@@ -694,7 +743,7 @@ async function arrancar() {
 
 try { tema = localStorage.getItem('fam:tema') || 'oscuro'; } catch (e) {}
 aplicaTema();
-var _v = document.querySelector('#ver'); if (_v) _v.textContent = 'v4 · listo';
+var _v = document.querySelector('#ver'); if (_v) _v.textContent = 'v5 · listo';
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 arrancar();
