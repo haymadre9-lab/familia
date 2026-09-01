@@ -1,0 +1,17 @@
+{
+  "name": "Familia",
+  "short_name": "Familia",
+  "description": "Compra, casa, cole y salud de la familia, sincronizado entre los móviles de casa.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0E1226",
+  "theme_color": "#0E1226",
+  "lang": "es",
+  "icons": [
+    { "src": "icono-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icono-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icono-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
