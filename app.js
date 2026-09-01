@@ -14,6 +14,45 @@ let items = [], familia = null, yo = null, tab = 'hoy', offset = 0;
 let panelMode = null, panelDay = null, contextDate = null;
 let query = '', filtros = [], draft = {}, orden = 'usuario';
 let cola = [], avisados = {}, permiso = 'default';
+let tema = 'oscuro';
+
+/* aclara u oscurece un color para que se lea sobre el fondo actual */
+function tint(hex) {
+  if (tema !== 'claro' || !hex || hex[0] !== '#') return hex;
+  const n = parseInt(hex.slice(1), 16);
+  const r = Math.round(((n >> 16) & 255) * .62), g = Math.round(((n >> 8) & 255) * .62), b = Math.round((n & 255) * .62);
+  return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+}
+function aplicaTema() {
+  document.body.classList.toggle('claro', tema === 'claro');
+  const m = document.querySelector('meta[name="theme-color"]');
+  if (m) m.setAttribute('content', tema === 'claro' ? '#F2F4FB' : '#0E1226');
+  const b = document.querySelector('#btnTema');
+  if (b) b.textContent = 'Aspecto: ' + tema;
+}
+/* de qué color va cada chip cuando está elegido */
+function chipColor(seg, v) {
+  if (seg === 'persona' || (seg === 'filtro' && PERSONA[v])) return PERSONA[v];
+  if (SUBC[v]) return SUBC[v];
+  if (seg === 'tipo' && TIPO[v]) return TIPO[v].c;
+  if (seg === 'filtro') {
+    if (v === 'Salud') return TIPO.salud.c;
+    if (v === 'Casa') return TIPO.casa.c;
+    if (v === 'Compra') return TIPO.compra.c;
+  }
+  return null;
+}
+function pintaChip(btn, seg, on) {
+  const c = on ? chipColor(seg, btn.dataset.v || btn.dataset.filtro) : null;
+  if (c) { btn.style.background = c + '26'; btn.style.color = tint(c); btn.style.borderColor = c; }
+  else { btn.style.background = ''; btn.style.color = ''; btn.style.borderColor = ''; }
+}
+function pintaSegs(root) {
+  root.querySelectorAll('.seg').forEach(seg => {
+    const s = seg.dataset.seg || 'filtro';
+    seg.querySelectorAll('button').forEach(b => pintaChip(b, s, b.classList.contains('on')));
+  });
+}
 
 const DEF_COLORES = { Ian: '#45D6E8', Unax: '#FFB03B', Carlos: '#FF3D71', Miren: '#C86BFF' };
 let PERSONA = Object.assign({}, DEF_COLORES);
@@ -191,9 +230,9 @@ async function pedirPermiso() {
 function cardHTML(it, o) {
   o = o || {};
   const tags = [];
-  if (it.persona) { const pc = PERSONA[it.persona] || '#8A94C4'; tags.push(`<span class="tag" style="background:${pc}22;color:${pc}">${it.persona}</span>`); }
-  if (it.sub) tags.push(`<span class="tag" style="background:${SUBC[it.sub]}1f;color:${SUBC[it.sub]}">${it.sub}</span>`);
-  else if (it.tipo !== 'compra' && o.showTipo !== false) tags.push(`<span class="tag" style="background:${TIPO[it.tipo].c}1f;color:${TIPO[it.tipo].c}">${TIPO[it.tipo].n}</span>`);
+  if (it.persona) { const pc = PERSONA[it.persona] || '#8A94C4'; tags.push(`<span class="tag" style="background:${pc}22;color:${tint(pc)}">${it.persona}</span>`); }
+  if (it.sub) tags.push(`<span class="tag" style="background:${SUBC[it.sub]}1f;color:${tint(SUBC[it.sub])}">${it.sub}</span>`);
+  else if (it.tipo !== 'compra' && o.showTipo !== false) tags.push(`<span class="tag" style="background:${TIPO[it.tipo].c}1f;color:${tint(TIPO[it.tipo].c)}">${TIPO[it.tipo].n}</span>`);
   if (it.hora) tags.push(esc(it.hora));
   if (o.showFecha && it.fecha) tags.push(cap(parse(it.fecha).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })));
   if (it.lugar) tags.push(esc(it.lugar));
@@ -379,6 +418,7 @@ function openFind() {
     <input class="field" id="findInput" placeholder="dentista, mates, excursión…">
     <div class="seg" id="findChips">${chips}</div><div id="findResults"></div>`;
   findResults();
+  pintaSegs($('#panelBody'));
   setTimeout(() => { const e = $('#findInput'); if (e) e.focus(); }, 60);
 }
 function matchFiltro(it) {
@@ -463,14 +503,15 @@ function openSheet(it, presetFecha) {
     <input class="field" id="f_notas" value="${esc(it && it.notas || '')}" placeholder="Nota (opcional)"></div>`;
   $('#sheetBody').innerHTML = h;
   if (tipo !== 'cole') $('#segSub').classList.add('hidden');
+  pintaSegs($('#sheetBody'));
   $('#sheet').classList.remove('hidden');
   setTimeout(() => $('#f_texto').focus(), 60);
   $('#f_mic').addEventListener('click', function () { dictar('f_texto', this); });
   $('#sheetBody').querySelectorAll('.seg').forEach(seg => {
     seg.addEventListener('click', e => {
       const b = e.target.closest('button'); if (!b) return;
-      seg.querySelectorAll('button').forEach(x => x.classList.remove('on'));
-      b.classList.add('on'); draft[seg.dataset.seg] = b.dataset.v;
+      seg.querySelectorAll('button').forEach(x => { x.classList.remove('on'); pintaChip(x, seg.dataset.seg, false); });
+      b.classList.add('on'); pintaChip(b, seg.dataset.seg, true); draft[seg.dataset.seg] = b.dataset.v;
       if (seg.dataset.seg === 'tipo') {
         $('#blkCompra').classList.toggle('hidden', b.dataset.v !== 'compra');
         $('#blkOtro').classList.toggle('hidden', b.dataset.v === 'compra');
@@ -527,7 +568,7 @@ function wire(root) {
     if (fi) {
       const f = fi.dataset.filtro, k = filtros.indexOf(f);
       if (k >= 0) filtros.splice(k, 1); else filtros.push(f);
-      fi.classList.toggle('on', k < 0); findResults(); return;
+      fi.classList.toggle('on', k < 0); pintaChip(fi, 'filtro', k < 0); findResults(); return;
     }
     if (c) { const a = get(c.dataset.check); a.hecho = !a.hecho; upsert(a); return; }
     if (d) { const b = get(d.dataset.del); b.borrado = true; upsert(b); return; }
@@ -570,6 +611,11 @@ $('#menu').addEventListener('input', e => {
   PERSONA[c.dataset.color] = c.value; draw(); guardaAjustes();
 });
 $('#btnPerm').addEventListener('click', pedirPermiso);
+$('#btnTema').addEventListener('click', () => {
+  tema = tema === 'claro' ? 'oscuro' : 'claro';
+  try { localStorage.setItem('fam:tema', tema); } catch (e) {}
+  aplicaTema(); draw();
+});
 $('#btnOrden').addEventListener('click', function () {
   orden = orden === 'tienda' ? 'usuario' : 'tienda';
   this.textContent = 'Orden de la compra: ' + (orden === 'tienda' ? 'recorrido de tienda' : 'mi lista');
@@ -635,6 +681,9 @@ async function arrancar() {
   setInterval(vaciarCola, 20000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { cargar(); checkAvisos(); } });
 }
+
+try { tema = localStorage.getItem('fam:tema') || 'oscuro'; } catch (e) {}
+aplicaTema();
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 arrancar();

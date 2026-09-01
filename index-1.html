@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0E1226">
+<title>Familia</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icono-192.png">
+<link rel="apple-touch-icon" href="icono-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="estilo.css">
+</head>
+<body>
+
+<div id="gate" class="gate">
+  <h1 class="gate-title">Familia</h1>
+  <p class="gate-copy">Entra con tu correo y contraseña.</p>
+  <input id="mail" class="field" type="email" autocomplete="username" placeholder="correo">
+  <input id="pass" class="field" type="password" autocomplete="current-password" placeholder="contraseña">
+  <button id="entrar" class="btn-primary">Entrar</button>
+  <p class="gate-warn" id="gateMsg"></p>
+</div>
+
+<div id="main" class="hidden">
+  <nav class="navwrap" id="tabs">
+    <div class="row1">
+      <button class="tab is-on" data-tab="hoy">Hoy</button>
+      <button class="tab" data-tab="semana">Semana</button>
+      <button class="tab" data-tab="mes">Mes</button>
+      <span class="spacer"></span>
+      <button class="icon" id="findBtn" aria-label="Buscar">🔍</button>
+      <button class="icon" id="menuBtn" aria-label="Opciones">⚙️<span class="dot" id="dot"></span></button>
+    </div>
+    <div class="row2">
+      <button class="box" data-tab="compra">Compra</button>
+      <button class="box" data-tab="casa">Casa</button>
+      <button class="box" data-tab="cole">Cole</button>
+      <button class="box" data-tab="salud">Salud</button>
+    </div>
+  </nav>
+  <main id="view"></main>
+  <button id="fab" class="fab" aria-label="Añadir">+</button>
+</div>
+
+<div id="panel" class="panel hidden">
+  <header class="panel-bar">
+    <button class="bar-btn" id="panelBack">‹ Volver</button>
+    <div class="panel-nav" id="panelNav"></div>
+  </header>
+  <div id="panelBody" class="panel-body"></div>
+  <button id="panelFab" class="fab hidden" aria-label="Añadir">+</button>
+</div>
+
+<div id="sheet" class="sheet hidden">
+  <div class="sheet-card">
+    <div class="sheet-head"><h2 id="sheetTitle">Añadir</h2><button id="sheetClose" class="bar-btn">Cerrar</button></div>
+    <div id="sheetBody"></div>
+    <button id="saveBtn" class="btn-primary">Guardar</button>
+    <button id="delBtn" class="btn-ghost danger hidden" style="margin-top:10px">Borrar</button>
+  </div>
+</div>
+
+<div id="menu" class="sheet hidden">
+  <div class="sheet-card">
+    <div class="sheet-head"><h2>Opciones</h2><button id="menuClose" class="bar-btn">Cerrar</button></div>
+    <p class="hint" style="margin:0 0 6px">Aspecto</p>
+    <button class="btn-ghost" id="btnTema">Aspecto: oscuro</button>
+    <p class="hint" style="margin:14px 0 6px">Colores de cada uno</p>
+    <div id="colorRows"></div>
+    <p class="hint" style="margin:14px 0 6px">Avisos</p>
+    <button class="btn-ghost" id="btnPerm">Activar avisos en este móvil</button>
+    <button class="btn-ghost" id="btnOrden">Orden de la compra: mi lista</button>
+    <button class="btn-ghost" id="btnExport">Exportar copia</button>
+    <button class="btn-ghost" id="btnImport">Restaurar copia</button>
+    <button class="btn-ghost danger" id="btnSalir">Cerrar sesión</button>
+    <textarea id="ioBox" class="field mono hidden" rows="6"></textarea>
+    <p class="hint" id="menuHint"></p>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

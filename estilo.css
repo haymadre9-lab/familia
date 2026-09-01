@@ -173,3 +173,25 @@
   .offline { position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 50; text-align: center;
     background: var(--raise); border: 1px solid var(--line); color: var(--unax);
     border-radius: 12px; padding: 10px; font-size: 13px; }
+
+  /* ---------- modo claro ---------- */
+  body.claro {
+    --base: #F2F4FB; --surface: #FFFFFF; --raise: #E9EDF9; --line: #D4DBEF;
+    --text: #151A2C; --muted: #646D8C;
+    background: radial-gradient(120% 60% at 50% 0%, #FFFFFF 0%, var(--base) 60%);
+  }
+  body.claro .navwrap { background: rgba(242,244,251,.94); }
+  body.claro .panel-bar { background: rgba(242,244,251,.94); }
+  body.claro .panel { background: var(--base); }
+  body.claro .sheet { background: rgba(20,26,48,.45); }
+  body.claro .card, body.claro .field, body.claro .icon, body.claro .sday, body.claro .mday {
+    box-shadow: 0 1px 2px rgba(21,26,44,.05);
+  }
+  body.claro .fab { box-shadow: 0 8px 24px rgba(21,26,44,.25); }
+  body.claro .field::placeholder { color: #9AA3C0; }
+  body.claro .check.on { color: #FFF; }
+  body.claro .box.is-on { filter: none; box-shadow: inset 0 0 0 2px currentColor; }
+
+  /* el punto solo aparece si algo va mal */
+  .dot { display: none; }
+  .dot.wait, .dot.bad { display: block; }
