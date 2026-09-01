@@ -12,7 +12,7 @@ const SB = window.supabase.createClient(SB_URL, SB_KEY, {
 });
 
 /* ---------- estado ---------- */
-let items = [], familia = null, yo = null, tab = 'hoy', offset = 0;
+let items = [], familia = null, yo = null, yoId = null, tab = 'hoy', offset = 0;
 let panelMode = null, panelDay = null, contextDate = null;
 let query = '', filtros = [], draft = {}, orden = 'usuario';
 let cola = [], avisados = {}, permiso = 'default';
@@ -127,6 +127,7 @@ function aFila(it) {
   return {
     id: it.id, familia, tipo: it.tipo, texto: it.texto, cant: it.cant || null, sec: it.sec || null,
     persona: it.persona || null, sub: it.sub || null, fecha: it.fecha || null, hora: it.hora || null,
+    autor: yoId,
     lugar: it.lugar || null, notas: it.notas || null, aviso: it.aviso || 'no',
     voz: !!it.voz, hecho: !!it.hecho, borrado: !!it.borrado
   };
@@ -727,7 +728,7 @@ async function arrancar() {
   $('#gateMsg').textContent = '';
   const { data: mi } = await SB.from('fam_miembros').select('familia,nombre').eq('user_id', user.id).maybeSingle();
   if (!mi) { $('#gateMsg').textContent = 'Tu usuario no está en ninguna familia. Falta la fila en fam_miembros.'; return; }
-  familia = mi.familia; yo = mi.nombre;
+  familia = mi.familia; yo = mi.nombre; yoId = user.id;
   $('#gate').classList.add('hidden'); $('#main').classList.remove('hidden');
   try { avisados = JSON.parse(localStorage.getItem('fam:avisados')) || {}; } catch (e) {}
   try { cola = JSON.parse(localStorage.getItem('fam:cola')) || []; } catch (e) {}
@@ -743,7 +744,7 @@ async function arrancar() {
 
 try { tema = localStorage.getItem('fam:tema') || 'oscuro'; } catch (e) {}
 aplicaTema();
-var _v = document.querySelector('#ver'); if (_v) _v.textContent = 'v5 · listo';
+var _v = document.querySelector('#ver'); if (_v) _v.textContent = 'v6 · listo';
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 arrancar();
