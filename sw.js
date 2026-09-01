@@ -2,7 +2,7 @@
    1. Guarda la app para que abra sin cobertura.
    2. Recibe los push de los avisos (cuando montemos la Edge Function). */
 
-const CACHE = 'familia-v2';
+const CACHE = 'familia-v3';
 const SHELL = ['./', './index.html', './estilo.css', './app.js', './manifest.json', './icono-192.png', './icono-512.png'];
 
 self.addEventListener('install', e => {

@@ -5,8 +5,14 @@
 const SB_URL = 'https://ewacvknaabxwhrsbbjer.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV3YWN2a25hYWJ4d2hyc2JiamVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0OTg4NjgsImV4cCI6MjA5NTA3NDg2OH0.39QS7tReESKGcSBOTOp847Sa2fV_1K9QDiK04K3_AJA';
 
+if (!window.supabase) {
+  document.getElementById('gateMsg').textContent =
+    'No se ha cargado la librería de Supabase. Comprueba la conexión y recarga.';
+  throw new Error('supabase-js no cargado');
+}
+
 const SB = window.supabase.createClient(SB_URL, SB_KEY, {
-  auth: { persistSession: true, autoRefreshToken: true }
+  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, storageKey: 'fam:sesion' }
 });
 
 /* ---------- estado ---------- */
@@ -650,22 +656,32 @@ $('#btnSalir').addEventListener('click', async () => {
 });
 $('#entrar').addEventListener('click', entrar);
 $('#pass').addEventListener('keydown', e => { if (e.key === 'Enter') entrar(); });
+$('#mail').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('#pass').focus(); } });
 
 wire($('#view')); wire($('#panel'));
 window.addEventListener('online', vaciarCola);
 
 /* ---------- arranque ---------- */
 async function entrar() {
-  const email = $('#mail').value.trim(), password = $('#pass').value;
-  $('#gateMsg').textContent = 'Entrando…';
-  const { error } = await SB.auth.signInWithPassword({ email, password });
-  if (error) { $('#gateMsg').textContent = 'No entra: ' + error.message; return; }
-  arrancar();
+  const email = $('#mail').value.trim().toLowerCase(), password = $('#pass').value;
+  if (!email || !password) { $('#gateMsg').textContent = 'Faltan el correo o la contraseña.'; return; }
+  const btn = $('#entrar');
+  btn.disabled = true; btn.textContent = 'Entrando…'; $('#gateMsg').textContent = '';
+  try {
+    const { error } = await SB.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    await arrancar();
+  } catch (err) {
+    $('#gateMsg').textContent = 'No entra: ' + (err.message || 'error desconocido');
+  }
+  btn.disabled = false; btn.textContent = 'Entrar';
 }
 
 async function arrancar() {
-  const { data: { user } } = await SB.auth.getUser();
+  const { data: { session } } = await SB.auth.getSession();
+  const user = session && session.user;
   if (!user) { $('#gate').classList.remove('hidden'); $('#main').classList.add('hidden'); return; }
+  $('#gateMsg').textContent = '';
   const { data: mi } = await SB.from('fam_miembros').select('familia,nombre').eq('user_id', user.id).maybeSingle();
   if (!mi) { $('#gateMsg').textContent = 'Tu usuario no está en ninguna familia. Falta la fila en fam_miembros.'; return; }
   familia = mi.familia; yo = mi.nombre;

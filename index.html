@@ -17,9 +17,9 @@
 <div id="gate" class="gate">
   <h1 class="gate-title">Familia</h1>
   <p class="gate-copy">Entra con tu correo y contraseña.</p>
-  <input id="mail" class="field" type="email" autocomplete="username" placeholder="correo">
+  <input id="mail" class="field" type="email" inputmode="email" autocapitalize="none" autocorrect="off" autocomplete="username" placeholder="correo">
   <input id="pass" class="field" type="password" autocomplete="current-password" placeholder="contraseña">
-  <button id="entrar" class="btn-primary">Entrar</button>
+  <button id="entrar" class="btn-primary" type="button">Entrar</button>
   <p class="gate-warn" id="gateMsg"></p>
 </div>
 
@@ -65,7 +65,9 @@
 <div id="menu" class="sheet hidden">
   <div class="sheet-card">
     <div class="sheet-head"><h2>Opciones</h2><button id="menuClose" class="bar-btn">Cerrar</button></div>
-    <p class="hint" style="margin:0 0 6px">Colores de cada uno</p>
+    <p class="hint" style="margin:0 0 6px">Aspecto</p>
+    <button class="btn-ghost" id="btnTema">Aspecto: oscuro</button>
+    <p class="hint" style="margin:14px 0 6px">Colores de cada uno</p>
     <div id="colorRows"></div>
     <p class="hint" style="margin:14px 0 6px">Avisos</p>
     <button class="btn-ghost" id="btnPerm">Activar avisos en este móvil</button>
@@ -78,7 +80,7 @@
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="app.js"></script>
 </body>
 </html>
