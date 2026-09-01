@@ -21,6 +21,7 @@
   <input id="pass" class="field" type="password" autocomplete="current-password" placeholder="contraseña">
   <button id="entrar" class="btn-primary" type="button">Entrar</button>
   <p class="gate-warn" id="gateMsg"></p>
+  <p class="hint" id="ver" style="text-align:center">v4</p>
 </div>
 
 <div id="main" class="hidden">
@@ -80,7 +81,37 @@
   </div>
 </div>
 
+<script>
+/* Escotilla: abrir .../familia/?limpiar=1 borra caché y service worker. */
+if (location.search.indexOf('limpiar') >= 0) {
+  (async () => {
+    try {
+      const rs = await navigator.serviceWorker.getRegistrations();
+      for (const r of rs) await r.unregister();
+      const ks = await caches.keys();
+      for (const k of ks) await caches.delete(k);
+    } catch (e) {}
+    location.replace(location.pathname);
+  })();
+}
+/* Cualquier error de JavaScript se ve en pantalla, no en silencio. */
+function pintaError(txt) {
+  var m = document.getElementById('gateMsg');
+  if (m) m.textContent = txt;
+  var g = document.getElementById('gate');
+  if (g) g.classList.remove('hidden');
+}
+window.addEventListener('error', function (e) {
+  pintaError('Error: ' + (e.message || '') + ' · ' + (e.filename || '').split('/').pop() + ':' + (e.lineno || ''));
+});
+window.addEventListener('unhandledrejection', function (e) {
+  pintaError('Error: ' + ((e.reason && e.reason.message) || e.reason || 'promesa rechazada'));
+});
+</script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+if (!window.supabase) pintaError('No carga la librería de Supabase. ¿Sin conexión o CDN bloqueado?');
+</script>
 <script src="app.js"></script>
 </body>
 </html>

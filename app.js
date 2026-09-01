@@ -5,12 +5,6 @@
 const SB_URL = 'https://ewacvknaabxwhrsbbjer.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV3YWN2a25hYWJ4d2hyc2JiamVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0OTg4NjgsImV4cCI6MjA5NTA3NDg2OH0.39QS7tReESKGcSBOTOp847Sa2fV_1K9QDiK04K3_AJA';
 
-if (!window.supabase) {
-  document.getElementById('gateMsg').textContent =
-    'No se ha cargado la librería de Supabase. Comprueba la conexión y recarga.';
-  throw new Error('supabase-js no cargado');
-}
-
 const SB = window.supabase.createClient(SB_URL, SB_KEY, {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, storageKey: 'fam:sesion' }
 });
@@ -700,6 +694,7 @@ async function arrancar() {
 
 try { tema = localStorage.getItem('fam:tema') || 'oscuro'; } catch (e) {}
 aplicaTema();
+var _v = document.querySelector('#ver'); if (_v) _v.textContent = 'v4 · listo';
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 arrancar();
