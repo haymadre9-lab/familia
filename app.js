@@ -93,6 +93,9 @@ const DICT = {
 
 /* ---------- utilidades ---------- */
 const $ = s => document.querySelector(s);
+/* conecta un evento sólo si el elemento existe: si un archivo va desparejado,
+   se pierde ese botón pero la app sigue funcionando */
+function on(sel, ev, fn) { const el = document.querySelector(sel); if (el) el.addEventListener(ev, fn); }
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const iso = d => new Date(d.getTime() - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
@@ -697,50 +700,50 @@ function wire(root) {
   root.addEventListener('input', e => { if (e.target.id === 'findInput') { query = e.target.value; findResults(); } });
 }
 
-$('#tabs').addEventListener('click', e => {
+on('#tabs', 'click', e => {
   const b = e.target.closest('[data-tab]'); if (!b) return;
   document.querySelectorAll('[data-tab]').forEach(x => x.classList.remove('is-on'));
   b.classList.add('is-on'); tab = b.dataset.tab; offset = 0; render();
 });
-$('#findBtn').addEventListener('click', openFind);
-$('#panelBack').addEventListener('click', closePanel);
-$('#panelFab').addEventListener('click', () => openSheet(null, panelDay));
-$('#fab').addEventListener('click', () => openSheet(null));
-$('#sheetClose').addEventListener('click', () => $('#sheet').classList.add('hidden'));
-$('#saveBtn').addEventListener('click', save);
-$('#delBtn').addEventListener('click', () => {
+on('#findBtn', 'click', openFind);
+on('#panelBack', 'click', closePanel);
+on('#panelFab', 'click', () => openSheet(null, panelDay));
+on('#fab', 'click', () => openSheet(null));
+on('#sheetClose', 'click', () => $('#sheet').classList.add('hidden'));
+on('#saveBtn', 'click', save);
+on('#delBtn', 'click', () => {
   const it = get(draft.id); $('#sheet').classList.add('hidden');
   if (it && confirm('¿Borrar "' + it.texto + '"?\nIrá a la papelera, en Opciones.')) { it.borrado = true; upsert(it); }
 });
-$('#menuBtn').addEventListener('click', async () => {
+on('#menuBtn', 'click', async () => {
   pintaColores(); $('#menu').classList.remove('hidden');
-  $('#btnPapelera').textContent = 'Papelera (' + items.filter(i => i.borrado).length + ')';
+  const bp = $('#btnPapelera'); if (bp) bp.textContent = 'Papelera (' + items.filter(i => i.borrado).length + ')';
   await estadoPush();
-  $('#btnPerm').textContent = pushOn ? 'Avisos activados en este móvil ✓' : 'Activar avisos en este móvil';
+  const bperm = $('#btnPerm'); if (bperm) bperm.textContent = pushOn ? 'Avisos activados en este móvil ✓' : 'Activar avisos en este móvil';
 });
-$('#menuClose').addEventListener('click', () => { $('#menu').classList.add('hidden'); $('#ioBox').classList.add('hidden'); $('#menuHint').textContent = ''; });
-$('#menu').addEventListener('input', e => {
+on('#menuClose', 'click', () => { $('#menu').classList.add('hidden'); $('#ioBox').classList.add('hidden'); $('#menuHint').textContent = ''; });
+on('#menu', 'input', e => {
   const c = e.target.closest('[data-color]'); if (!c) return;
   PERSONA[c.dataset.color] = c.value; draw(); guardaAjustes();
 });
-$('#btnPerm').addEventListener('click', () => { permiso === 'granted' ? suscribirPush() : pedirPermiso(); });
-$('#btnPapelera').addEventListener('click', openTrash);
-$('#btnTema').addEventListener('click', () => {
+on('#btnPerm', 'click', () => { permiso === 'granted' ? suscribirPush() : pedirPermiso(); });
+on('#btnPapelera', 'click', openTrash);
+on('#btnTema', 'click', () => {
   tema = tema === 'claro' ? 'oscuro' : 'claro';
   try { localStorage.setItem('fam:tema', tema); } catch (e) {}
   aplicaTema(); draw();
 });
-$('#btnOrden').addEventListener('click', function () {
+on('#btnOrden', 'click', function () {
   orden = orden === 'tienda' ? 'usuario' : 'tienda';
   this.textContent = 'Orden de la compra: ' + (orden === 'tienda' ? 'recorrido de tienda' : 'mi lista');
   $('#menuHint').textContent = orden === 'tienda' ? 'Fruta primero, congelados y cosmética al final.' : 'Tu orden: cosmética, congelados, fruta…';
   guardaAjustes(); draw();
 });
-$('#btnExport').addEventListener('click', () => {
+on('#btnExport', 'click', () => {
   const b = $('#ioBox'); b.classList.remove('hidden'); b.value = JSON.stringify({ items }); b.select();
   $('#menuHint').textContent = 'Copia este texto y guárdalo donde quieras.';
 });
-$('#btnImport').addEventListener('click', async () => {
+on('#btnImport', 'click', async () => {
   const b = $('#ioBox');
   if (b.classList.contains('hidden') || !b.value.trim()) {
     b.classList.remove('hidden'); b.value = ''; b.focus();
@@ -759,14 +762,15 @@ $('#btnImport').addEventListener('click', async () => {
     $('#menuHint').textContent = inc.length + ' elementos importados.';
   } catch (e) { $('#menuHint').textContent = 'No se pudo importar: ' + (e.message || 'texto no válido'); }
 });
-$('#btnSalir').addEventListener('click', async () => {
+on('#btnSalir', 'click', async () => {
   await SB.auth.signOut(); localStorage.removeItem('fam:items'); location.reload();
 });
-$('#entrar').addEventListener('click', entrar);
-$('#pass').addEventListener('keydown', e => { if (e.key === 'Enter') entrar(); });
-$('#mail').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('#pass').focus(); } });
+on('#entrar', 'click', entrar);
+on('#pass', 'keydown', e => { if (e.key === 'Enter') entrar(); });
+on('#mail', 'keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('#pass').focus(); } });
 
-wire($('#view')); wire($('#panel'));
+if ($('#view')) wire($('#view'));
+if ($('#panel')) wire($('#panel'));
 window.addEventListener('online', vaciarCola);
 
 /* ---------- arranque ---------- */
@@ -808,7 +812,7 @@ async function arrancar() {
 
 try { tema = localStorage.getItem('fam:tema') || 'oscuro'; } catch (e) {}
 aplicaTema();
-var _v = document.querySelector('#ver'); if (_v) _v.textContent = 'v7 · listo';
+var _v = document.querySelector('#ver'); if (_v) _v.textContent = 'v8 · listo';
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 arrancar();
