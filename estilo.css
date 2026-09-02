@@ -195,3 +195,9 @@
   /* el punto solo aparece si algo va mal */
   .dot { display: none; }
   .dot.wait, .dot.bad { display: block; }
+
+  /* tarjeta en modo consulta: sin botones, con punto de color */
+  .card.ro { padding-left: 12px; }
+  .card.ro .c-body { pointer-events: none; }
+  .punto { width: 9px; height: 9px; border-radius: 50%; flex: none; margin-top: 6px; }
+  .dayrow .card { pointer-events: none; }

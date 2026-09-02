@@ -286,6 +286,19 @@ function cardHTML(it, o) {
   if (it.notas) tags.push(esc(it.notas));
   if (o.showSec && it.tipo === 'compra') tags.push(SEC[it.sec || 'otros'].i + ' ' + SEC[it.sec || 'otros'].n);
   const q = (it.voz ? '<span class="qty">🎤</span>' : '') + (it.cant ? `<span class="qty">${esc(it.cant)}</span>` : '');
+  if (o.ro) {
+    return `<div class="card ro ${it.hecho ? 'done' : ''}" style="border-left-color:${color(it)}">
+      <span class="punto" style="background:${color(it)}"></span>
+      <div class="c-body"><div class="c-text">${q}${esc(it.texto)}</div>
+      ${tags.length ? '<div class="c-meta">' + tags.join('') + '</div>' : ''}</div></div>`;
+  }
+  if (o.papelera) {
+    return `<div class="card" style="border-left-color:${color(it)};opacity:.75">
+      <div class="c-body"><div class="c-text">${q}${esc(it.texto)}</div>
+      ${tags.length ? '<div class="c-meta">' + tags.join('') + '</div>' : ''}</div>
+      <button class="bar-btn" data-restore="${it.id}" style="color:var(--libre)">Restaurar</button>
+      <button class="del" data-purge="${it.id}">×</button></div>`;
+  }
   return `<div class="card ${it.hecho && o.strike !== false ? 'done' : ''}" style="border-left-color:${color(it)}">
     <button class="check ${it.hecho ? 'on' : ''}" data-check="${it.id}">${it.hecho ? '✓' : ''}</button>
     <button class="c-body" data-edit="${it.id}"><div class="c-text">${q}${esc(it.texto)}</div>
@@ -336,7 +349,7 @@ function renderSemana() {
     if (!list.length) { h += `<div class="empty-day"><b>${nom} ${parse(dia).getDate()}</b><hr></div>`; return; }
     h += `<button class="dayrow" data-open="${dia}"><div class="day ${dia === t ? 'now' : ''}">
       <div class="day-head"><b>${nom} ${parse(dia).getDate()}</b><span class="count">${list.length}</span><span class="chev">›</span></div>
-      ${list.map(i => cardHTML(i)).join('')}</div></button>`;
+      ${list.map(i => cardHTML(i, { ro: true })).join('')}</div></button>`;
   });
   const futuro = live(it => !it.hecho && it.fecha > wEnd).sort(byDate);
   h += `<div class="ahead"><h3>Más adelante</h3><p>${futuro.length ? futuro.length + ' cosas apuntadas después del ' + parse(wEnd).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }) : 'Nada apuntado después de esta semana.'}</p>`;
@@ -344,7 +357,7 @@ function renderSemana() {
   futuro.forEach(it => {
     const m = cap(parse(it.fecha).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }));
     if (m !== mes) { if (mes) h += '</div>'; h += `<div class="mgroup"><h4>${m}</h4>`; mes = m; }
-    h += cardHTML(it, { showFecha: true });
+    h += `<button class="dayrow" data-open="${it.fecha}">${cardHTML(it, { showFecha: true, ro: true })}</button>`;
   });
   if (mes) h += '</div>';
   h += '</div>';
@@ -375,7 +388,7 @@ function renderMes() {
   let dia2 = null;
   pendientes.forEach(it => {
     if (it.fecha !== dia2) { dia2 = it.fecha; h += `<div class="day-head" style="padding-top:14px"><b>${cap(parse(it.fecha).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric' }))}</b></div>`; }
-    h += cardHTML(it);
+    h += `<button class="dayrow" data-open="${it.fecha}">${cardHTML(it, { ro: true })}</button>`;
   });
   return h + '</div>';
 }
@@ -429,6 +442,7 @@ function openCart() { panelMode = 'cart'; $('#panel').classList.remove('hidden')
 function closePanel() { panelMode = null; contextDate = null; $('#panel').classList.add('hidden'); }
 
 function renderPanel() {
+  if (panelMode === 'trash') return renderTrash();
   if (panelMode === 'day') {
     const list = live(x => x.fecha === panelDay).sort(byDate);
     $('#panelNav').innerHTML = '<button data-day="-1">‹</button><button data-day="1">›</button>';
@@ -452,6 +466,35 @@ function renderPanel() {
     });
     $('#panelBody').innerHTML = h;
   }
+}
+
+async function borrarDeVerdad(ids) {
+  if (!ids.length) return;
+  const { error } = await SB.from('fam_items').delete().in('id', ids);
+  if (error) { $('#panelBody').insertAdjacentHTML('afterbegin', '<p class="empty">No se pudo borrar: ' + error.message + '</p>'); return; }
+  items = items.filter(x => !ids.includes(x.id));
+  cache(); draw();
+}
+
+function openTrash() {
+  panelMode = 'trash';
+  $('#menu').classList.add('hidden');
+  $('#panel').classList.remove('hidden'); $('#panelFab').classList.add('hidden');
+  renderPanel();
+}
+
+function renderTrash() {
+  const lista = items.filter(i => i.borrado).sort((a, b) => {
+    const fa = a.fecha || '0000', fb = b.fecha || '0000';
+    if (fa !== fb) return fa > fb ? -1 : 1;
+    return (a.actualizado || '') > (b.actualizado || '') ? -1 : 1;
+  });
+  $('#panelNav').innerHTML = lista.length
+    ? '<button class="bar-btn" id="vaciarPapelera" style="width:auto;padding:0 12px;color:var(--hoy)">Vaciar</button>' : '';
+  let h = `<div class="big-date">${lista.length}</div><p class="big-sub">en la papelera · lo borrado se guarda aquí hasta que lo elimines</p>`;
+  if (!lista.length) h += '<p class="empty">Papelera vacía. Lo que borres con la × aparecerá aquí y podrás recuperarlo.</p>';
+  h += lista.map(i => cardHTML(i, { showFecha: true, papelera: true })).join('');
+  $('#panelBody').innerHTML = h;
 }
 
 /* ---------- buscador ---------- */
@@ -617,7 +660,26 @@ function wire(root) {
       fi.classList.toggle('on', k < 0); pintaChip(fi, 'filtro', k < 0); findResults(); return;
     }
     if (c) { const a = get(c.dataset.check); a.hecho = !a.hecho; upsert(a); return; }
-    if (d) { const b = get(d.dataset.del); b.borrado = true; upsert(b); return; }
+    if (d) {
+      const b = get(d.dataset.del);
+      if (!confirm('¿Borrar "' + b.texto + '"?\nIrá a la papelera, en Opciones.')) return;
+      b.borrado = true; upsert(b); return;
+    }
+    if (e.target.closest('[data-restore]')) {
+      const r = get(e.target.closest('[data-restore]').dataset.restore);
+      r.borrado = false; upsert(r); return;
+    }
+    if (e.target.closest('[data-purge]')) {
+      const id = e.target.closest('[data-purge]').dataset.purge;
+      const it2 = get(id);
+      if (!confirm('Borrar "' + it2.texto + '" para siempre. Esto no se puede deshacer.')) return;
+      borrarDeVerdad([id]); return;
+    }
+    if (e.target.id === 'vaciarPapelera') {
+      const ids = items.filter(x => x.borrado).map(x => x.id);
+      if (!confirm('Vaciar la papelera: ' + ids.length + ' elementos, para siempre.')) return;
+      borrarDeVerdad(ids); return;
+    }
     if (ed) { openSheet(get(ed.dataset.edit)); return; }
     if (n) { const v = +n.dataset.nav; offset = v === 0 ? 0 : offset + v; render(); return; }
     if (op) { openDay(op.dataset.open); return; }
@@ -648,10 +710,11 @@ $('#sheetClose').addEventListener('click', () => $('#sheet').classList.add('hidd
 $('#saveBtn').addEventListener('click', save);
 $('#delBtn').addEventListener('click', () => {
   const it = get(draft.id); $('#sheet').classList.add('hidden');
-  if (it) { it.borrado = true; upsert(it); }
+  if (it && confirm('¿Borrar "' + it.texto + '"?\nIrá a la papelera, en Opciones.')) { it.borrado = true; upsert(it); }
 });
 $('#menuBtn').addEventListener('click', async () => {
   pintaColores(); $('#menu').classList.remove('hidden');
+  $('#btnPapelera').textContent = 'Papelera (' + items.filter(i => i.borrado).length + ')';
   await estadoPush();
   $('#btnPerm').textContent = pushOn ? 'Avisos activados en este móvil ✓' : 'Activar avisos en este móvil';
 });
@@ -661,6 +724,7 @@ $('#menu').addEventListener('input', e => {
   PERSONA[c.dataset.color] = c.value; draw(); guardaAjustes();
 });
 $('#btnPerm').addEventListener('click', () => { permiso === 'granted' ? suscribirPush() : pedirPermiso(); });
+$('#btnPapelera').addEventListener('click', openTrash);
 $('#btnTema').addEventListener('click', () => {
   tema = tema === 'claro' ? 'oscuro' : 'claro';
   try { localStorage.setItem('fam:tema', tema); } catch (e) {}
@@ -744,7 +808,7 @@ async function arrancar() {
 
 try { tema = localStorage.getItem('fam:tema') || 'oscuro'; } catch (e) {}
 aplicaTema();
-var _v = document.querySelector('#ver'); if (_v) _v.textContent = 'v6 · listo';
+var _v = document.querySelector('#ver'); if (_v) _v.textContent = 'v7 · listo';
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 arrancar();
