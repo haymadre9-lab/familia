@@ -567,6 +567,30 @@ function dictar(inputId, btn) {
   } catch (e) { inp.placeholder = 'No se pudo usar el micrófono'; btn.textContent = '🎤'; }
 }
 
+/* ---------- pasar una cita a Google Calendar ---------- */
+function gcalUrl(it) {
+  if (!it.fecha) return null;
+  const limpia = d => d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+  let fechas;
+  if (it.hora) {
+    const ini = new Date(it.fecha + 'T' + it.hora + ':00');
+    const fin = new Date(ini.getTime() + 60 * 60000);
+    fechas = limpia(ini) + '/' + limpia(fin);
+  } else {
+    const d = it.fecha.replace(/-/g, '');
+    const sig = new Date(it.fecha + 'T00:00:00');
+    sig.setDate(sig.getDate() + 1);
+    fechas = d + '/' + iso(sig).replace(/-/g, '');
+  }
+  const titulo = (it.persona ? it.persona + ' · ' : '') + it.texto;
+  const detalle = [it.sub || TIPO[it.tipo].n, it.notas].filter(Boolean).join(' — ');
+  return 'https://calendar.google.com/calendar/render?action=TEMPLATE'
+    + '&text=' + encodeURIComponent(titulo)
+    + '&dates=' + fechas
+    + '&details=' + encodeURIComponent(detalle + ' · apuntado en Familia')
+    + (it.lugar ? '&location=' + encodeURIComponent(it.lugar) : '');
+}
+
 /* ---------- formulario ---------- */
 function openSheet(it, presetFecha) {
   const isEdit = !!it;
@@ -593,7 +617,16 @@ function openSheet(it, presetFecha) {
     <div class="seg" data-seg="aviso">${AVISOS.map(a => `<button data-v="${a[0]}"${a[0] === draft.aviso ? ' class="on"' : ''}>${a[1]}</button>`).join('')}</div>
     <input class="field" id="f_lugar" value="${esc(it && it.lugar || '')}" placeholder="Sitio (opcional)">
     <input class="field" id="f_notas" value="${esc(it && it.notas || '')}" placeholder="Nota (opcional)"></div>`;
+  if (isEdit && it.fecha) {
+    h += `<button class="btn-ghost" id="gcal" style="margin-top:4px">📅 Añadir a Google Calendar</button>`;
+  }
   $('#sheetBody').innerHTML = h;
+  if (isEdit && it.fecha) {
+    $('#gcal').addEventListener('click', () => {
+      const u = gcalUrl(it);
+      if (u) window.open(u, '_blank', 'noopener');
+    });
+  }
   if (tipo !== 'cole') $('#segSub').classList.add('hidden');
   pintaSegs($('#sheetBody'));
   $('#sheet').classList.remove('hidden');
@@ -812,7 +845,7 @@ async function arrancar() {
 
 try { tema = localStorage.getItem('fam:tema') || 'oscuro'; } catch (e) {}
 aplicaTema();
-var _v = document.querySelector('#ver'); if (_v) _v.textContent = 'v8 · listo';
+var _v = document.querySelector('#ver'); if (_v) _v.textContent = 'v9 · listo';
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 arrancar();
