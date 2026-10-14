@@ -201,3 +201,26 @@
   .card.ro .c-body { pointer-events: none; }
   .punto { width: 9px; height: 9px; border-radius: 50%; flex: none; margin-top: 6px; }
   .dayrow .card { pointer-events: none; }
+
+  /* ---------- notas ---------- */
+  .row2 { grid-template-columns: repeat(5, 1fr); }
+  .box { padding: 11px 2px; font-size: 12.5px; }
+  .box[data-tab="notas"] { background: rgba(255,209,102,.13); color: #FFD166; border-color: rgba(255,209,102,.3); }
+  body.claro .box[data-tab="notas"] { color: #8A6A10; }
+
+  .notacard { display: flex; gap: 12px; align-items: center; width: 100%; text-align: left;
+    background: var(--surface); border: 1px solid var(--line); border-left: 4px solid #FFD166;
+    border-radius: 12px; padding: 11px 12px; margin-bottom: 8px; color: var(--text); }
+  .nfecha { flex: none; width: 46px; text-align: center; }
+  .nfecha b { display: block; font-size: 22px; font-weight: 650; letter-spacing: -.02em; line-height: 1; }
+  .nfecha span { display: block; font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .ncuerpo { flex: 1; min-width: 0; }
+  .nhead { display: flex; align-items: center; gap: 7px; margin-bottom: 3px; }
+  .nhora { font-size: 13px; color: var(--muted); font-weight: 600; }
+  .lock { font-size: 12px; }
+  .notacard .chev { color: var(--muted); font-size: 18px; }
+
+  .notadet { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+  .notatit { margin: 0 0 12px; font-size: 21px; font-weight: 640; letter-spacing: -.02em; line-height: 1.25; }
+  .notacuerpo { font-size: 15.5px; line-height: 1.65; white-space: pre-wrap; word-break: break-word; }
+  textarea.field { resize: vertical; font-family: inherit; line-height: 1.55; }
