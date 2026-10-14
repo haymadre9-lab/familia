@@ -17,6 +17,8 @@ let panelMode = null, panelDay = null, contextDate = null;
 let query = '', filtros = [], draft = {}, orden = 'usuario';
 let cola = [], avisados = {}, permiso = 'default';
 let tema = 'oscuro', pushOn = false;
+let REUNIONES = ['Pleno', 'Tráfico', 'Líneas', 'CSSL', 'Empleo', 'Nóminas'];
+let filtroReunion = '', panelNota = null;
 
 /* aclara u oscurece un color para que se lea sobre el fondo actual */
 function tint(hex) {
@@ -61,7 +63,8 @@ let PERSONA = Object.assign({}, DEF_COLORES);
 
 const TIPO = {
   compra: { n: 'Compra', c: '#6EE7A0' }, casa: { n: 'Casa', c: '#8FA8FF' },
-  cole: { n: 'Cole', c: '#45D6E8' }, salud: { n: 'Salud', c: '#FF8A5C' }
+  cole: { n: 'Cole', c: '#45D6E8' }, salud: { n: 'Salud', c: '#FF8A5C' },
+  nota: { n: 'Nota', c: '#FFD166' }
 };
 const SUBC = { 'Deberes': '#8FA8FF', 'Examen': '#FF6B8B', 'Tutoría': '#C08CF0', 'Excursión': '#6EE7A0' };
 const COLE = ['Deberes', 'Examen', 'Tutoría', 'Excursión'];
@@ -123,6 +126,7 @@ function limpiaFila(r) {
     persona: r.persona || '', sub: r.sub || '', fecha: r.fecha || '',
     hora: r.hora ? String(r.hora).slice(0, 5) : '', lugar: r.lugar || '', notas: r.notas || '',
     aviso: r.aviso || 'no', voz: !!r.voz, hecho: !!r.hecho, borrado: !!r.borrado,
+    reunion: r.reunion || '', cuerpo: r.cuerpo || '', privada: !!r.privada, autor: r.autor || '',
     actualizado: r.actualizado || new Date().toISOString()
   };
 }
@@ -132,7 +136,8 @@ function aFila(it) {
     persona: it.persona || null, sub: it.sub || null, fecha: it.fecha || null, hora: it.hora || null,
     autor: yoId,
     lugar: it.lugar || null, notas: it.notas || null, aviso: it.aviso || 'no',
-    voz: !!it.voz, hecho: !!it.hecho, borrado: !!it.borrado
+    voz: !!it.voz, hecho: !!it.hecho, borrado: !!it.borrado,
+    reunion: it.reunion || null, cuerpo: it.cuerpo || null, privada: !!it.privada
   };
 }
 function cache() { try { localStorage.setItem('fam:items', JSON.stringify(items)); } catch (e) {} }
@@ -182,6 +187,7 @@ function escuchar() {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'fam_items' }, p => {
       if (!p.new || !p.new.id) return;
       const it = limpiaFila(p.new);
+      if (it.privada && it.autor && it.autor !== yoId) return;   // cinturón: lo privado del otro, ni se toca
       const i = items.findIndex(x => x.id === it.id);
       if (i >= 0) { if (items[i].actualizado > it.actualizado) return; items[i] = it; }
       else items.push(it);
@@ -279,6 +285,11 @@ async function pedirPermiso() {
 function cardHTML(it, o) {
   o = o || {};
   const tags = [];
+  if (it.tipo === 'nota') {
+    if (it.reunion) tags.push(`<span class="tag" style="background:#FFD16622;color:${tint('#FFD166')}">${esc(it.reunion)}</span>`);
+    if (it.privada) tags.push('🔒 privada');
+    if (it.cuerpo) tags.push(esc(it.cuerpo.replace(/\s+/g, ' ').slice(0, 60)) + (it.cuerpo.length > 60 ? '…' : ''));
+  }
   if (it.persona) { const pc = PERSONA[it.persona] || '#8A94C4'; tags.push(`<span class="tag" style="background:${pc}22;color:${tint(pc)}">${it.persona}</span>`); }
   if (it.sub) tags.push(`<span class="tag" style="background:${SUBC[it.sub]}1f;color:${tint(SUBC[it.sub])}">${it.sub}</span>`);
   else if (it.tipo !== 'compra' && o.showTipo !== false) tags.push(`<span class="tag" style="background:${TIPO[it.tipo].c}1f;color:${tint(TIPO[it.tipo].c)}">${TIPO[it.tipo].n}</span>`);
@@ -413,12 +424,58 @@ function renderCompra() {
   return h;
 }
 
+function renderNotas() {
+  const mias = live(i => i.tipo === 'nota');
+  const chips = ['', ...REUNIONES, '—libres—'].map(r => {
+    const et = r === '' ? 'Todas' : r === '—libres—' ? 'Sueltas' : r;
+    return `<button data-reunion="${esc(r)}"${r === filtroReunion ? ' class="on"' : ''}>${esc(et)}</button>`;
+  }).join('');
+  let lista = mias;
+  if (filtroReunion === '—libres—') lista = mias.filter(i => !i.reunion);
+  else if (filtroReunion) lista = mias.filter(i => i.reunion === filtroReunion);
+
+  const t = today();
+  const prox = lista.filter(i => i.fecha && i.fecha >= t).sort(byDate);
+  const sueltas = lista.filter(i => !i.fecha).sort((a, b) => (a.actualizado > b.actualizado ? -1 : 1));
+  const pasadas = lista.filter(i => i.fecha && i.fecha < t).sort((a, b) => (a.fecha > b.fecha ? -1 : 1));
+
+  let h = `<div class="weeknav"><div><h2>Notas</h2><p>${mias.length} en total · lo privado solo lo ves tú</p></div></div>`;
+  h += `<div class="seg" id="segReuniones">${chips}</div>`;
+
+  if (prox.length) {
+    h += '<section class="sec"><h3>Próximas reuniones</h3>';
+    prox.forEach(it => {
+      const d = parse(it.fecha);
+      h += `<button class="notacard" data-nota="${it.id}">
+        <div class="nfecha"><b>${d.getDate()}</b><span>${d.toLocaleDateString('es-ES', { month: 'short' }).replace('.', '')}</span></div>
+        <div class="ncuerpo">
+          <div class="nhead">${it.reunion ? `<span class="tag" style="background:#FFD16622;color:${tint('#FFD166')}">${esc(it.reunion)}</span>` : ''}
+            <b class="nhora">${it.hora || 'sin hora'}</b>${it.privada ? '<span class="lock">🔒</span>' : ''}</div>
+          <div class="c-text">${esc(it.texto)}</div>
+          <div class="c-meta">${cap(d.toLocaleDateString('es-ES', { weekday: 'long' }))}${it.lugar ? ' · ' + esc(it.lugar) : ''}</div>
+        </div><span class="chev">›</span></button>`;
+    });
+    h += '</section>';
+  }
+  if (sueltas.length) {
+    h += '<section class="sec"><h3>Apuntes</h3>' +
+      sueltas.map(i => `<button class="dayrow" data-nota="${i.id}">${cardHTML(i, { ro: true })}</button>`).join('') + '</section>';
+  }
+  if (pasadas.length) {
+    h += '<section class="sec"><h3>Pasadas</h3>' +
+      pasadas.map(i => `<button class="dayrow" data-nota="${i.id}">${cardHTML(i, { ro: true, showFecha: true })}</button>`).join('') + '</section>';
+  }
+  if (!lista.length) h += '<p class="empty">Aquí van tus apuntes del trabajo, los recados y las notas de las reuniones. Con el + creas una; marca <b>Privada</b> y nadie más la verá, ni en su móvil ni en la base de datos.</p>';
+  return h;
+}
+
 function render() {
   let h = '';
   if (tab === 'hoy') h = renderHoy();
   if (tab === 'semana') h = renderSemana();
   if (tab === 'mes') h = renderMes();
   if (tab === 'compra') h = renderCompra();
+  if (tab === 'notas') h = renderNotas();
   if (tab === 'casa') {
     const t2 = live(i => i.tipo === 'casa').sort(byDate);
     h += section('Pendiente', t2.filter(i => !i.hecho), { showFecha: true }) + section('Hecho', t2.filter(i => i.hecho), { showFecha: true });
@@ -437,15 +494,68 @@ function render() {
   }
   $('#view').innerHTML = h;
 }
-function draw() { render(); if (panelMode === 'find') findResults(); else if (panelMode) renderPanel(); }
+function badge() {
+  try {
+    const t = today();
+    const n = live(i => !i.hecho && i.fecha && i.fecha <= t).length;
+    if (navigator.setAppBadge) { n ? navigator.setAppBadge(n) : navigator.clearAppBadge(); }
+  } catch (e) {}
+}
+
+function draw() { badge(); render(); if (panelMode === 'find') findResults(); else if (panelMode) renderPanel(); }
 
 /* ---------- paneles ---------- */
 function openDay(dia) { panelMode = 'day'; panelDay = dia; contextDate = dia; $('#panel').classList.remove('hidden'); $('#panelFab').classList.remove('hidden'); renderPanel(); }
 function openCart() { panelMode = 'cart'; $('#panel').classList.remove('hidden'); $('#panelFab').classList.add('hidden'); renderPanel(); }
 function closePanel() { panelMode = null; contextDate = null; $('#panel').classList.add('hidden'); }
 
+function openNota(id) {
+  panelMode = 'nota'; panelNota = id;
+  $('#panel').classList.remove('hidden'); $('#panelFab').classList.add('hidden');
+  renderPanel();
+}
+
+function renderNota() {
+  const it = get(panelNota);
+  if (!it) { closePanel(); return; }
+  $('#panelNav').innerHTML = '<button class="bar-btn" id="editNota" style="width:auto;padding:0 12px">Editar</button>';
+  let h = '';
+  if (it.fecha) {
+    const d = parse(it.fecha);
+    h += `<div class="big-date">${d.getDate()} ${d.toLocaleDateString('es-ES', { month: 'short' }).replace('.', '')}</div>
+      <p class="big-sub">${cap(d.toLocaleDateString('es-ES', { weekday: 'long' }))}${it.hora ? ' · <b style="color:var(--text)">' + it.hora + '</b>' : ''}${it.lugar ? ' · ' + esc(it.lugar) : ''}</p>`;
+  }
+  h += `<div class="notadet">
+    <div class="c-meta" style="margin-bottom:10px">
+      ${it.reunion ? `<span class="tag" style="background:#FFD16622;color:${tint('#FFD166')}">${esc(it.reunion)}</span>` : ''}
+      ${it.privada ? '<span class="tag" style="background:#FF6B8B22;color:' + tint('#FF6B8B') + '">🔒 privada</span>' : ''}
+      ${it.aviso && it.aviso !== 'no' ? '🔔 ' + (AVISOS.find(a => a[0] === it.aviso) || ['', ''])[1].toLowerCase() : ''}
+    </div>
+    <h2 class="notatit">${esc(it.texto)}</h2>
+    <div class="notacuerpo">${it.cuerpo ? esc(it.cuerpo).replace(/\n/g, '<br>') : '<span class="empty">Sin texto. Pulsa Editar para escribir.</span>'}</div>
+  </div>`;
+  h += `<button class="btn-ghost" id="fijarNota" style="margin-top:20px">📌 Fijar en la pantalla del móvil</button>`;
+  if (it.fecha) h += `<button class="btn-ghost" id="gcalNota">📅 Añadir a Google Calendar</button>`;
+  $('#panelBody').innerHTML = h;
+}
+
+function renderReuniones() {
+  $('#panelNav').innerHTML = '';
+  let h = `<div class="big-date" style="font-size:34px">Reuniones</div>
+    <p class="big-sub">Los tipos que aparecen al crear una nota. Edítalos, añade o quita.</p>`;
+  h += REUNIONES.map((r, i) =>
+    `<div class="crow"><input class="field" style="margin:0;flex:1" data-reu="${i}" value="${esc(r)}">
+      <button class="del" data-quitar="${i}">×</button></div>`).join('');
+  h += `<div class="crow"><input class="field" style="margin:0;flex:1" id="nuevaReunion" placeholder="Añadir tipo (p. ej. Comité)">
+    <button class="bar-btn" id="addReunion" style="color:var(--libre);width:auto;padding:0 10px">Añadir</button></div>`;
+  h += '<p class="hint">Si cambias el nombre de un tipo, las notas que ya lo usaban se quedan con el nombre viejo.</p>';
+  $('#panelBody').innerHTML = h;
+}
+
 function renderPanel() {
   if (panelMode === 'trash') return renderTrash();
+  if (panelMode === 'nota') return renderNota();
+  if (panelMode === 'reuniones') return renderReuniones();
   if (panelMode === 'day') {
     const list = live(x => x.fecha === panelDay).sort(byDate);
     $('#panelNav').innerHTML = '<button data-day="-1">‹</button><button data-day="1">›</button>';
@@ -567,6 +677,40 @@ function dictar(inputId, btn) {
   } catch (e) { inp.placeholder = 'No se pudo usar el micrófono'; btn.textContent = '🎤'; }
 }
 
+/* ---------- fijar una nota en la pantalla ---------- */
+async function fijar(it) {
+  if (!('serviceWorker' in navigator)) return;
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') {
+    alert('Para fijar una nota hacen falta los avisos activados: ⚙️ → Activar avisos.');
+    return;
+  }
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const partes = [];
+    if (it.reunion) partes.push(it.reunion);
+    if (it.fecha) partes.push(cap(parse(it.fecha).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })));
+    if (it.hora) partes.push(it.hora);
+    if (it.lugar) partes.push(it.lugar);
+    const cuerpo = (it.cuerpo || '').replace(/\s+/g, ' ').slice(0, 220);
+    await reg.showNotification('📌 ' + it.texto, {
+      body: [partes.join(' · '), cuerpo].filter(Boolean).join('\n'),
+      tag: 'fijada', icon: 'icono-192.png', badge: 'icono-192.png',
+      silent: true, requireInteraction: true, renotify: false,
+      data: { url: './index.html', fijada: true }
+    });
+    try { localStorage.setItem('fam:fijada', it.id); } catch (e) {}
+    $('#menuHint') && ($('#menuHint').textContent = '');
+  } catch (e) {}
+}
+
+async function quitarFijada() {
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    (await reg.getNotifications({ tag: 'fijada' })).forEach(n => n.close());
+    localStorage.removeItem('fam:fijada');
+  } catch (e) {}
+}
+
 /* ---------- pasar una cita a Google Calendar ---------- */
 function gcalUrl(it) {
   if (!it.fecha) return null;
@@ -594,22 +738,35 @@ function gcalUrl(it) {
 /* ---------- formulario ---------- */
 function openSheet(it, presetFecha) {
   const isEdit = !!it;
-  let tipo = it ? it.tipo : (tab === 'compra' ? 'compra' : ['casa', 'cole', 'salud'].includes(tab) ? tab : 'cole');
+  let tipo = it ? it.tipo : (tab === 'compra' ? 'compra' : ['casa', 'cole', 'salud', 'notas'].includes(tab) ? (tab === 'notas' ? 'nota' : tab) : 'cole');
   if (panelMode === 'day' && !it) tipo = 'cole';
-  draft = { id: it ? it.id : uid(), tipo, persona: (it && it.persona) || 'Ian', sub: (it && it.sub) || 'Deberes', sec: (it && it.sec) || 'otros', voz: (it && it.voz) || false, aviso: it ? (it.aviso || 'no') : '1d' };
+  if ((panelMode === 'nota' || panelMode === 'reuniones') && !it) tipo = 'nota';
+  draft = { id: it ? it.id : uid(), tipo, persona: (it && it.persona) || 'Ian', sub: (it && it.sub) || 'Deberes', sec: (it && it.sec) || 'otros', voz: (it && it.voz) || false, aviso: it ? (it.aviso || 'no') : '1d',
+    reunion: (it && it.reunion) || (filtroReunion && filtroReunion !== '—libres—' ? filtroReunion : ''), privada: it ? !!it.privada : false };
   let h = '';
-  $('#sheetTitle').textContent = isEdit ? 'Editar' : (tipo === 'compra' ? 'Añadir a la compra' : 'Añadir');
+  $('#sheetTitle').textContent = isEdit ? 'Editar' : (tipo === 'compra' ? 'Añadir a la compra' : tipo === 'nota' ? 'Nueva nota' : 'Añadir');
   $('#delBtn').classList.toggle('hidden', !isEdit);
-  if (!isEdit && tipo !== 'compra') {
+  if (!isEdit && tipo !== 'compra' && tipo !== 'nota') {
     h += '<div class="seg" data-seg="tipo">' + [['cole', 'Cole'], ['salud', 'Salud'], ['casa', 'Casa'], ['compra', 'Compra']]
       .map(p => `<button data-v="${p[0]}"${p[0] === tipo ? ' class="on"' : ''}>${p[1]}</button>`).join('') + '</div>';
   }
-  h += `<div class="rowmic"><input class="field" id="f_texto" value="${esc(it && it.texto || '')}" placeholder="${tipo === 'compra' ? 'Producto' : '¿Qué es?'}">
+  h += `<div class="rowmic"><input class="field" id="f_texto" value="${esc(it && it.texto || '')}" placeholder="${tipo === 'compra' ? 'Producto' : tipo === 'nota' ? 'Título de la nota' : '¿Qué es?'}">
     <button class="mic" id="f_mic">🎤</button></div>`;
   h += `<div id="blkCompra" class="${tipo === 'compra' ? '' : 'hidden'}">
     <input class="field" id="f_cant" value="${esc(it && it.cant || '')}" placeholder="Cantidad (2, 1 kg, 500 g…)">
     <div class="seg" data-seg="sec">${orderList().map(s => `<button data-v="${s}"${s === draft.sec ? ' class="on"' : ''}>${SEC[s].i} ${SEC[s].n}</button>`).join('')}</div></div>`;
-  h += `<div id="blkOtro" class="${tipo === 'compra' ? 'hidden' : ''}">
+  h += `<div id="blkNota" class="${tipo === 'nota' ? '' : 'hidden'}">
+    <textarea class="field" id="f_cuerpo" rows="7" placeholder="Escribe aquí: puntos del orden del día, lo que se acordó, lo que tienes que preguntar…">${esc(it && it.cuerpo || '')}</textarea>
+    <div class="seg" data-seg="reunion">
+      <button data-v=""${!draft.reunion ? ' class="on"' : ''}>Sin reunión</button>
+      ${REUNIONES.map(r => `<button data-v="${esc(r)}"${r === draft.reunion ? ' class="on"' : ''}>${esc(r)}</button>`).join('')}
+    </div>
+    <button class="btn-ghost" id="privBtn" style="margin-bottom:12px">${draft.privada ? '🔒 Privada · solo tú la ves' : '👁 Compartida con casa'}</button>
+    <div class="two"><input class="field" id="n_fecha" type="date" value="${it ? (it.fecha || '') : ''}">
+    <input class="field" id="n_hora" type="time" value="${it && it.hora || ''}"></div>
+    <div class="seg" data-seg="aviso2">${AVISOS.map(a => `<button data-v="${a[0]}"${a[0] === draft.aviso ? ' class="on"' : ''}>${a[1]}</button>`).join('')}</div>
+    <input class="field" id="n_lugar" value="${esc(it && it.lugar || '')}" placeholder="Sitio (opcional)"></div>`;
+  h += `<div id="blkOtro" class="${tipo === 'compra' || tipo === 'nota' ? 'hidden' : ''}">
     <div class="seg" data-seg="persona">${GENTE.map(n => `<button data-v="${n}"${n === draft.persona ? ' class="on"' : ''}>${n}</button>`).join('')}</div>
     <div class="seg" data-seg="sub" id="segSub">${COLE.map(n => `<button data-v="${n}"${n === draft.sub ? ' class="on"' : ''}>${n}</button>`).join('')}</div>
     <div class="two"><input class="field" id="f_fecha" type="date" value="${it ? (it.fecha || '') : (presetFecha || contextDate || today())}">
@@ -617,10 +774,12 @@ function openSheet(it, presetFecha) {
     <div class="seg" data-seg="aviso">${AVISOS.map(a => `<button data-v="${a[0]}"${a[0] === draft.aviso ? ' class="on"' : ''}>${a[1]}</button>`).join('')}</div>
     <input class="field" id="f_lugar" value="${esc(it && it.lugar || '')}" placeholder="Sitio (opcional)">
     <input class="field" id="f_notas" value="${esc(it && it.notas || '')}" placeholder="Nota (opcional)"></div>`;
+  if (isEdit) h += `<button class="btn-ghost" id="fijarItem" style="margin-top:4px">📌 Fijar en la pantalla</button>`;
   if (isEdit && it.fecha) {
-    h += `<button class="btn-ghost" id="gcal" style="margin-top:4px">📅 Añadir a Google Calendar</button>`;
+    h += `<button class="btn-ghost" id="gcal">📅 Añadir a Google Calendar</button>`;
   }
   $('#sheetBody').innerHTML = h;
+  if (isEdit) $('#fijarItem').addEventListener('click', () => { $('#sheet').classList.add('hidden'); fijar(it); });
   if (isEdit && it.fecha) {
     $('#gcal').addEventListener('click', () => {
       const u = gcalUrl(it);
@@ -628,6 +787,14 @@ function openSheet(it, presetFecha) {
     });
   }
   if (tipo !== 'cole') $('#segSub').classList.add('hidden');
+  if (tipo === 'nota') {
+    $('#privBtn').addEventListener('click', function () {
+      draft.privada = !draft.privada;
+      this.textContent = draft.privada ? '🔒 Privada · solo tú la ves' : '👁 Compartida con casa';
+      this.style.color = draft.privada ? 'var(--hoy)' : '';
+    });
+    if (draft.privada) $('#privBtn').style.color = 'var(--hoy)';
+  }
   pintaSegs($('#sheetBody'));
   $('#sheet').classList.remove('hidden');
   setTimeout(() => $('#f_texto').focus(), 60);
@@ -652,6 +819,15 @@ function save() {
   const prev = get(draft.id) || {};
   const it = { id: draft.id, tipo: draft.tipo, texto: tx.trim(), voz: draft.voz || prev.voz || false, hecho: !!prev.hecho, borrado: false };
   if (draft.tipo === 'compra') { it.cant = $('#f_cant').value.trim(); it.sec = draft.sec; }
+  else if (draft.tipo === 'nota') {
+    it.cuerpo = $('#f_cuerpo').value;
+    it.reunion = draft.reunion || '';
+    it.privada = !!draft.privada;
+    it.persona = yo || '';
+    it.fecha = $('#n_fecha').value || ''; it.hora = $('#n_hora').value || '';
+    it.aviso = it.fecha ? (draft.aviso2 || draft.aviso || 'no') : 'no';
+    it.lugar = $('#n_lugar').value.trim();
+  }
   else {
     it.persona = draft.persona;
     if (draft.tipo === 'cole') it.sub = draft.sub;
@@ -673,13 +849,14 @@ function pintaColores() {
     `<div class="crow"><b>${n}</b>${n === 'Carlos' || n === 'Miren' ? '<em>adulto</em>' : ''}<input type="color" data-color="${n}" value="${PERSONA[n]}"></div>`).join('');
 }
 async function guardaAjustes() {
-  await SB.from('fam_ajustes').upsert({ familia, colores: PERSONA, orden, actualizado: new Date().toISOString() });
+  await SB.from('fam_ajustes').upsert({ familia, colores: PERSONA, orden, reuniones: REUNIONES.filter(r => r.trim()), actualizado: new Date().toISOString() });
 }
 async function cargarAjustes() {
   const { data } = await SB.from('fam_ajustes').select('*').eq('familia', familia).maybeSingle();
   if (data) {
     if (data.colores) for (const k in DEF_COLORES) if (data.colores[k]) PERSONA[k] = data.colores[k];
     if (data.orden) orden = data.orden;
+    if (Array.isArray(data.reuniones) && data.reuniones.length) REUNIONES = data.reuniones;
   }
   $('#btnOrden').textContent = 'Orden de la compra: ' + (orden === 'tienda' ? 'recorrido de tienda' : 'mi lista');
 }
@@ -721,6 +898,26 @@ function wire(root) {
     if (op) { openDay(op.dataset.open); return; }
     if (ca) { openCart(); return; }
     if (dn) { panelDay = shift(panelDay, +dn.dataset.day); contextDate = panelDay; renderPanel(); return; }
+    const fr = e.target.closest('[data-reunion]');
+    if (fr) { filtroReunion = fr.dataset.reunion; render(); return; }
+    const nt = e.target.closest('[data-nota]');
+    if (nt) { openNota(nt.dataset.nota); return; }
+    if (e.target.id === 'editNota') { openSheet(get(panelNota)); return; }
+    if (e.target.id === 'fijarNota') { fijar(get(panelNota)); return; }
+    if (e.target.id === 'gcalNota') { const u = gcalUrl(get(panelNota)); if (u) window.open(u, '_blank', 'noopener'); return; }
+    if (e.target.id === 'addReunion') {
+      const v = $('#nuevaReunion').value.trim();
+      if (v && !REUNIONES.includes(v)) { REUNIONES.push(v); guardaAjustes(); renderReuniones(); }
+      return;
+    }
+    const qr = e.target.closest('[data-quitar]');
+    if (qr) {
+      const i = +qr.dataset.quitar;
+      if (confirm('Quitar "' + REUNIONES[i] + '" de la lista de tipos?')) {
+        REUNIONES.splice(i, 1); guardaAjustes(); renderReuniones();
+      }
+      return;
+    }
     if (e.target.id === 'askPerm') { pedirPermiso(); return; }
     if (e.target.id === 'q_mic') { dictar('q_texto', e.target); return; }
     if (e.target.id === 'q_add') { quickAdd(); return; }
@@ -730,7 +927,11 @@ function wire(root) {
     }
   });
   root.addEventListener('keydown', e => { if (e.key === 'Enter' && ['q_texto', 'q_cant'].includes(e.target.id)) quickAdd(); });
-  root.addEventListener('input', e => { if (e.target.id === 'findInput') { query = e.target.value; findResults(); } });
+  root.addEventListener('input', e => {
+    if (e.target.id === 'findInput') { query = e.target.value; findResults(); }
+    const r = e.target.closest('[data-reu]');
+    if (r) { REUNIONES[+r.dataset.reu] = r.value; clearTimeout(window._tr); window._tr = setTimeout(guardaAjustes, 800); }
+  });
 }
 
 on('#tabs', 'click', e => {
@@ -760,7 +961,17 @@ on('#menu', 'input', e => {
   PERSONA[c.dataset.color] = c.value; draw(); guardaAjustes();
 });
 on('#btnPerm', 'click', () => { permiso === 'granted' ? suscribirPush() : pedirPermiso(); });
+on('#btnQuitarFijada', 'click', async () => {
+  await quitarFijada();
+  $('#menuHint').textContent = 'Nota fijada retirada.';
+});
 on('#btnPapelera', 'click', openTrash);
+on('#btnReuniones', 'click', () => {
+  $('#menu').classList.add('hidden');
+  panelMode = 'reuniones';
+  $('#panel').classList.remove('hidden'); $('#panelFab').classList.add('hidden');
+  renderPanel();
+});
 on('#btnTema', 'click', () => {
   tema = tema === 'claro' ? 'oscuro' : 'claro';
   try { localStorage.setItem('fam:tema', tema); } catch (e) {}
@@ -845,7 +1056,7 @@ async function arrancar() {
 
 try { tema = localStorage.getItem('fam:tema') || 'oscuro'; } catch (e) {}
 aplicaTema();
-var _v = document.querySelector('#ver'); if (_v) _v.textContent = 'v9 · listo';
+var _v = document.querySelector('#ver'); if (_v) _v.textContent = 'v11 · listo';
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 arrancar();

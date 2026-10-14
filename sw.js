@@ -2,7 +2,7 @@
    1. Guarda la app para que abra sin cobertura.
    2. Recibe los push de los avisos (cuando montemos la Edge Function). */
 
-const CACHE = 'familia-v9';
+const CACHE = 'familia-v11';
 const SHELL = ['./', './index.html', './estilo.css', './app.js', './manifest.json', './icono-192.png', './icono-512.png'];
 
 self.addEventListener('install', e => {
@@ -37,6 +37,9 @@ self.addEventListener('fetch', e => {
 self.addEventListener('push', e => {
   let d = { title: 'Familia', body: 'Tienes un aviso' };
   try { d = e.data.json(); } catch (err) { if (e.data) d.body = e.data.text(); }
+  if (typeof d.badge === 'number' && self.navigator && self.navigator.setAppBadge) {
+    try { d.badge ? self.navigator.setAppBadge(d.badge) : self.navigator.clearAppBadge(); } catch (err) {}
+  }
   e.waitUntil(self.registration.showNotification(d.title, {
     body: d.body,
     icon: 'icono-192.png',
@@ -47,7 +50,8 @@ self.addEventListener('push', e => {
 });
 
 self.addEventListener('notificationclick', e => {
-  e.notification.close();
+  // la nota fijada no se cierra al pulsarla: se queda en la barra
+  if (!(e.notification.data && e.notification.data.fijada)) e.notification.close();
   const destino = (e.notification.data && e.notification.data.url) || './index.html';
   e.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true }).then(ws => {
     for (const w of ws) if ('focus' in w) return w.focus();
