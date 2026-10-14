@@ -1,8 +1,4 @@
--- ============================================================
---  familia · pestaña de Notas  (ejecutar entero, pestaña nueva)
--- ============================================================
-
--- 1. Campos nuevos
+-- 1. Columnas nuevas
 alter table fam_items add column if not exists reunion text;
 alter table fam_items add column if not exists cuerpo  text;
 alter table fam_items add column if not exists privada boolean not null default false;
@@ -13,8 +9,11 @@ alter table fam_items drop constraint if exists fam_items_tipo_check;
 alter table fam_items add  constraint fam_items_tipo_check
   check (tipo in ('compra','casa','cole','salud','nota'));
 
+create index if not exists fam_items_novedades on fam_items (familia, notificado_at)
+  where notificado_at is null and borrado = false;
+
 -- 3. Privacidad de verdad: una nota privada sólo se la devuelve
---    la base de datos a quien la escribió. No es un filtro de pantalla.
+--    la base de datos a quien la escribió
 drop policy if exists fam_items_todo on fam_items;
 create policy fam_items_todo on fam_items
   for all to authenticated
@@ -47,8 +46,13 @@ $$;
 
 revoke all on function fam_novedades() from public, anon, authenticated;
 
--- 6. Nada viejo genera avisos de novedad
+-- 6. Nada de lo ya apuntado genera aviso de novedad
 update fam_items set notificado_at = now() where notificado_at is null;
 
--- 7. Comprobación
+-- 7. Refrescar la caché de esquema de la API (lo que te faltaba)
+notify pgrst, 'reload schema';
+
+-- 8. Comprobación: deben salir las tres columnas y la lista de reuniones
+select column_name from information_schema.columns
+where table_name = 'fam_items' and column_name in ('reunion','cuerpo','privada');
 select reuniones from fam_ajustes;
