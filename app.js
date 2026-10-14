@@ -153,8 +153,27 @@ async function cargar() {
 
 async function subir(it) {
   const { error } = await SB.from('fam_items').upsert(aFila(it));
-  if (error) { encolar(it); status('bad'); return false; }
+  if (error) {
+    // Si el servidor rechaza el dato (columna que falta, valor no permitido),
+    // reintentar no arregla nada: hay que verlo.
+    const deDatos = /column|constraint|violates|schema|invalid|policy/i.test(error.message || '');
+    if (deDatos) { avisoFallo('No se pudo guardar: ' + error.message); items = items.filter(x => x.id !== it.id); cache(); render(); }
+    else encolar(it);
+    status('bad'); return false;
+  }
   status('ok'); return true;
+}
+
+function avisoFallo(txt) {
+  let el = document.querySelector('#fallo');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'fallo'; el.className = 'offline';
+    el.style.color = 'var(--hoy)';
+    document.body.appendChild(el);
+    el.addEventListener('click', () => el.remove());
+  }
+  el.textContent = txt + ' · toca para cerrar';
 }
 function encolar(it) {
   cola = cola.filter(x => x.id !== it.id); cola.push(it);
@@ -1056,7 +1075,7 @@ async function arrancar() {
 
 try { tema = localStorage.getItem('fam:tema') || 'oscuro'; } catch (e) {}
 aplicaTema();
-var _v = document.querySelector('#ver'); if (_v) _v.textContent = 'v11 · listo';
+var _v = document.querySelector('#ver'); if (_v) _v.textContent = 'v12 · listo';
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 arrancar();
