@@ -1,28 +1,54 @@
--- Ejecutar una sola vez en el SQL Editor, pestaña nueva y vacía.
--- Guarda los colores de los cuatro y el orden de la compra,
--- compartidos entre los dos móviles.
+-- ============================================================
+--  familia · pestaña de Notas  (ejecutar entero, pestaña nueva)
+-- ============================================================
 
-create table if not exists fam_ajustes (
-  familia     uuid primary key,
-  colores     jsonb not null default '{}'::jsonb,
-  orden       text  not null default 'usuario',
-  actualizado timestamptz not null default now()
-);
+-- 1. Campos nuevos
+alter table fam_items add column if not exists reunion text;
+alter table fam_items add column if not exists cuerpo  text;
+alter table fam_items add column if not exists privada boolean not null default false;
+alter table fam_items add column if not exists notificado_at timestamptz;
 
-alter table fam_ajustes enable row level security;
+-- 2. 'nota' pasa a ser un tipo válido
+alter table fam_items drop constraint if exists fam_items_tipo_check;
+alter table fam_items add  constraint fam_items_tipo_check
+  check (tipo in ('compra','casa','cole','salud','nota'));
 
-drop policy if exists fam_ajustes_todo on fam_ajustes;
-create policy fam_ajustes_todo on fam_ajustes
+-- 3. Privacidad de verdad: una nota privada sólo se la devuelve
+--    la base de datos a quien la escribió. No es un filtro de pantalla.
+drop policy if exists fam_items_todo on fam_items;
+create policy fam_items_todo on fam_items
   for all to authenticated
-  using      (familia = fam_mi_familia())
+  using      (familia = fam_mi_familia() and (privada = false or autor = auth.uid()))
   with check (familia = fam_mi_familia());
 
-revoke all on fam_ajustes from anon;
+-- 4. Tipos de reunión editables, compartidos
+alter table fam_ajustes add column if not exists reuniones jsonb
+  not null default '["Pleno","Tráfico","Líneas","CSSL","Empleo","Nóminas"]'::jsonb;
 
-insert into fam_ajustes (familia, colores)
-select distinct familia,
-  '{"Ian":"#45D6E8","Unax":"#FFB03B","Carlos":"#FF3D71","Miren":"#C86BFF"}'::jsonb
-from fam_miembros
-on conflict (familia) do nothing;
+update fam_ajustes
+   set reuniones = '["Pleno","Tráfico","Líneas","CSSL","Empleo","Nóminas"]'::jsonb
+ where reuniones is null or reuniones = '[]'::jsonb;
 
-select * from fam_ajustes;
+-- 5. Las novedades no delatan notas privadas ni la compra
+create or replace function fam_novedades()
+returns table (id text, familia uuid, autor uuid, texto text, persona text, tipo text, fecha date)
+language sql security definer set search_path = public as $$
+  select i.id, i.familia, i.autor, i.texto, i.persona, i.tipo, i.fecha
+  from fam_items i
+  where i.notificado_at is null
+    and i.borrado = false
+    and i.hecho = false
+    and i.privada = false
+    and i.tipo <> 'compra'
+    and i.autor is not null
+    and i.creado > now() - interval '6 hours'
+  order by i.creado;
+$$;
+
+revoke all on function fam_novedades() from public, anon, authenticated;
+
+-- 6. Nada viejo genera avisos de novedad
+update fam_items set notificado_at = now() where notificado_at is null;
+
+-- 7. Comprobación
+select reuniones from fam_ajustes;
